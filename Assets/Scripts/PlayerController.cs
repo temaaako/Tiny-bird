@@ -1,138 +1,114 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
 
 public class PlayerController : MonoBehaviour
 {
     public float rotationSpeed = 5f;
     public float speed = 5f;
-
-    private Animator animator;
     public float jumpForce = 10f;
     public AudioSource runningSound;
     public Rigidbody2D rb;
 
-    private SpriteRenderer spriteRenderer;
-    private bool facingRight = true;
-    private bool isRunning = false;
-    private bool rotationMode = false;
+    private Animator _animator;
+    private SpriteRenderer _spriteRenderer;
+    private bool _facingRight = true;
+    private bool _isRunning = false;
+    private bool _rotationMode = false;
+    private bool _isGrounded = false;
 
     private void Awake()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
+        _spriteRenderer = GetComponent<SpriteRenderer>();
+        _animator = GetComponent<Animator>();
     }
-
-    void Start()
-    {
-        animator = GetComponent<Animator>();
-    }
-
 
     void Update()
     {
+        HandleInput();
+        MoveCharacter();
+        if (_isGrounded)
+        {
+            _animator.SetBool("Flying", false);
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                Jump();
+            }
+        }
+    }
+
+    void FixedUpdate()
+    {
+        
+    }
+
+    void MoveCharacter()
+    {
         float horizontalInput = Input.GetAxis("Horizontal");
-        if (horizontalInput > 0 && !facingRight)
-        {
-            Flip();
-        }
-        else if (horizontalInput < 0 && facingRight)
-        {
-            Flip();
-        }
 
-        if (horizontalInput == 0f && isRunning && !rotationMode)
+        if (_rotationMode)
         {
-            animator.SetBool("Running", false);
-            runningSound.Stop();
-            isRunning = false;
-        }
-
-        if (horizontalInput != 0f && !isRunning)
-        {
-            animator.SetBool("Running", true);
-            runningSound.Play();
-            isRunning = true;
-        }
-
-        //transform.Translate(new Vector3(horizontalInput * speed * Time.deltaTime, 0, 0));
-        if (Input.GetKeyDown(KeyCode.R))
-        {
-            rotationMode = SwitchRotationMode();
-        }
-
-        if (rotationMode)
-        {
-            transform.Rotate(Vector3.back * horizontalInput * rotationSpeed * Time.deltaTime);
+            transform.Rotate(Vector3.back * horizontalInput * rotationSpeed * Time.fixedDeltaTime);
         }
         else
         {
-            transform.position += new Vector3(horizontalInput * speed * Time.deltaTime, 0, 0);
+            rb.linearVelocity = new Vector2(horizontalInput * speed, rb.linearVelocity.y);
         }
 
         RaycastHit2D raycast = Physics2D.Raycast(transform.position, Vector2.down);
+        _isGrounded = raycast.collider != null && raycast.distance < 0.5f;
+    }
 
+    void HandleInput()
+    {
+        float horizontalInput = Input.GetAxis("Horizontal");
 
-        DrawGizmos();
-
-        if (Input.GetKeyDown(KeyCode.Space))
+        // Flip character sprite based on movement direction
+        if (horizontalInput > 0 && !_facingRight || horizontalInput < 0 && _facingRight)
         {
-            Jump();
-            animator.SetBool("Flying", true);
+            Flip();
+        }
+
+        // Handle running animation and sound
+        if (Mathf.Abs(horizontalInput) > 0f && !_isRunning)
+        {
+            _animator.SetBool("Running", true);
+            if (!runningSound.isPlaying) runningSound.Play();
+            _isRunning = true;
+        }
+        else if (Mathf.Abs(horizontalInput) == 0f && _isRunning)
+        {
+            _animator.SetBool("Running", false);
+            runningSound.Stop();
+            _isRunning = false;
+        }
+
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            _rotationMode = !_rotationMode;
         }
     }
 
-    private bool SwitchRotationMode()
+    void Jump()
     {
-
-        if (rotationMode)
-        {
-            return false;
-        }
-        else
-        {
-            return true;
-        }
+        _animator.SetBool("Flying", true);
+        rb.linearVelocity = Vector2.up * jumpForce;
+        _isGrounded = false;
     }
 
-    private void Flip()
+    void Flip()
     {
-        // Изменяем значение флага разворота
-        facingRight = !facingRight;
-
-        // Переворачиваем спрайт по оси X
+        _facingRight = !_facingRight;
         Vector3 theScale = transform.localScale;
         theScale.x *= -1;
         transform.localScale = theScale;
-    }
-        
-    void Jump()
-    {
-        float angleInRadians = -transform.rotation.eulerAngles.z * Mathf.Deg2Rad;
-        float sinAngle = Mathf.Sin(angleInRadians);
-        float cosAngle = Mathf.Cos(angleInRadians);
-        Vector2 jumpVector = new Vector2(sinAngle, cosAngle).normalized;
-        Debug.Log(jumpVector);
-        rb.velocity = jumpVector * jumpForce;
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
         if (collision.collider.gameObject.layer == LayerMask.NameToLayer("Ground"))
         {
-            // The collision belongs to the ground layer
-            Debug.Log("Collision belongs to ground layer");
+            _isGrounded = true;
         }
-    }
-
-    private void DrawGizmos()
-    {
-        float angleInRadians = -transform.rotation.eulerAngles.z * Mathf.Deg2Rad;
-        float sinAngle = Mathf.Sin(angleInRadians);
-        float cosAngle = Mathf.Cos(angleInRadians);
-        Vector2 jumpVector = new Vector2(sinAngle, cosAngle).normalized;
-
-        Debug.DrawLine(transform.position, transform.position+new Vector3(jumpVector.x,jumpVector.y), Color.red);
-
     }
 }
